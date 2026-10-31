@@ -1,35 +1,54 @@
-# Polli Snap - Text to Image Meme Maker
+# Polli Snap — Text to Image Meme Maker
 
 Fast text-to-image meme generator powered by the **Pollinations image API**.
 
+[![Made with Pollinations](https://pollinations.ai/badge-made-with.svg)](https://pollinations.ai)
+
+Live: **https://mhmdrizzzki.github.io/polli-snap/**
+
 ## Pollinations integration
 
-This app **calls the Pollinations image API** directly:
+The app calls the current Pollinations image endpoint directly from the browser,
+using the visitor's own key (BYOP — you pay your own Pollen):
 
-- **`index.html`** — client: sends the typed prompt to the local `/api` endpoint and renders the returned image in the page.
-- **`server_snap.py`** — backend: builds the Pollinations image request and returns the generated-image URL.
+**`index.html`**
 
-The actual Pollinations API call lives in `server_snap.py`:
-
-```python
-POLLINATIONS_IMAGE_BASE = "https://gen.pollinations.ai/"
-image_url = POLLINATIONS_IMAGE_BASE + quote(prompt) + "?model=flux&nologo=true"
+```js
+const r = await fetch('https://gen.pollinations.ai/v1/images/generations', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer ' + apiKey,
+  },
+  body: JSON.stringify({ model: 'flux', prompt, n: 1, size: '1024x1024' }),
+});
+const { data } = await r.json();
+img.src = data[0].url;
 ```
 
-Every generation uses `model=flux` on `gen.pollinations.ai`, so the image you see is produced by Pollinations.
+Model: `flux` · Endpoint: `POST https://gen.pollinations.ai/v1/images/generations`
+
+### Getting a key
+
+Paste an `sk_...` key from [enter.pollinations.ai](https://enter.pollinations.ai)
+into the key field at the top of the page. The key is kept in `sessionStorage` for
+that tab only and is never sent anywhere except `gen.pollinations.ai`.
 
 ## Run locally
 
 ```bash
-python3 server_snap.py   # serves on :8892
-# open http://localhost:8892
+python3 -m http.server 8000     # static app
+# or, with the optional Python proxy:
+POLLINATIONS_API_KEY=sk_... python3 server_snap.py
 ```
 
-## Try it
+## Files
 
-1. Type a meme prompt (or tap a preset), hit Generate.
-2. `index.html` fetches `/api?q=<prompt>`.
-3. `server_snap.py` builds the Pollinations `gen.pollinations.ai/<prompt>?model=flux` URL.
-4. The generated image is shown inline.
+- `index.html` — the whole app (UI + Pollinations API call, client-side BYOP)
+- `server_snap.py` — optional local proxy for development; not required for the live app
 
-Live demo: Polli Snap (image category, no login needed).
+## Note on the old endpoint
+
+Earlier versions used `GET https://gen.pollinations.ai/<prompt>?model=flux`.
+That endpoint was removed upstream (it now returns `404`), which is why image
+generation stopped working. This version uses `POST /v1/images/generations`.
