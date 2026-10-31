@@ -23,6 +23,13 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 POLLINATIONS_IMAGES = "https://gen.pollinations.ai/v1/images/generations"
+POLLINATIONS_CLASSIC = "https://image.pollinations.ai/prompt/"
+
+
+def classic_url(prompt, seed=42):
+    """Free, keyless endpoint. Returns a direct JPEG URL."""
+    from urllib.parse import quote
+    return POLLINATIONS_CLASSIC + quote(prompt) + "?width=768&height=768&seed=%s&nologo=true" % seed
 
 
 def generate(prompt, api_key, model="flux", size="1024x1024"):
@@ -59,7 +66,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.respond_json({"error": "empty prompt"})
             key = os.environ.get("POLLINATIONS_API_KEY", "")
             if not key:
-                return self.respond_json({"error": "set POLLINATIONS_API_KEY to use the server-side proxy"})
+                # keyless path: the free classic endpoint serves the JPEG directly
+                return self.respond_json({"url": classic_url(prompt), "mode": "classic"})
             ok, payload = generate(prompt, key)
             if not ok:
                 return self.respond_json(payload)

@@ -28,7 +28,7 @@ button:disabled{opacity:.6}
 <p class="sub">Text-to-image meme maker powered by Pollinations. Type a prompt, get an image.</p>
 
 <div id="keyrow">
-  <input id="k" type="password" placeholder="Paste your Pollinations API key (sk_...) — BYOP, you pay your own Pollen">
+  <input id="k" type="password" placeholder="Optional: your Pollinations key (sk_...) for higher limits & every model">
 </div>
 
 <div class="preset">
@@ -41,38 +41,54 @@ button:disabled{opacity:.6}
 <button id="b" type="submit">Generate</button>
 </form>
 <div id="out">Your image will appear here.</div>
-<p class="hint">Powered by <b>Pollinations</b> image API · <a href="https://pollinations.ai" target="_blank" rel="noopener">pollinations.ai</a> · get a key at <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a></p>
+<p class="hint">Powered by <b>Pollinations</b> image API · <a href="https://pollinations.ai" target="_blank" rel="noopener">pollinations.ai</a> · works without a key (free, rate-limited) · higher limits with a key from <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a></p>
 </div>
 <script>
 var out=document.getElementById('out'),inp=document.getElementById('i'),btn=document.getElementById('b'),keyEl=document.getElementById('k');
-// remember key for the session only
 try{ var sk=sessionStorage.getItem('polli_key'); if(sk) keyEl.value=sk; }catch(e){}
 document.querySelectorAll('.p').forEach(function(b){b.onclick=function(){inp.value=b.textContent;}});
+
+// Two paths, same result:
+//  - keyed  : POST https://gen.pollinations.ai/v1/images/generations  (BYOP, every model, no logo)
+//  - keyless: GET  https://image.pollinations.ai/prompt/<prompt>      (free, rate-limited per IP, small logo)
+function classicUrl(q,seed){
+  return 'https://image.pollinations.ai/prompt/'+encodeURIComponent(q)
+       + '?width=768&height=768&seed='+seed+'&nologo=true';
+}
+
 document.getElementById('f').addEventListener('submit',async function(e){
   e.preventDefault();
   var q=inp.value.trim(); if(!q) return;
   var key=(keyEl.value||'').trim();
-  if(!key){ out.innerHTML='⚠ Paste your Pollinations API key first (BYOP).'; keyEl.focus(); return; }
-  try{ sessionStorage.setItem('polli_key',key); }catch(e){}
+  var seed=Math.floor(Math.random()*1e6);
   btn.disabled=true; out.innerHTML='Generating...';
   try{
-    var r=await fetch('https://gen.pollinations.ai/v1/images/generations',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-      body:JSON.stringify({model:'flux',prompt:q,n:1,size:'1024x1024'})
-    });
-    var d=await r.json();
-    if(!r.ok){
-      var msg=(d&&d.error&&d.error.message)||('HTTP '+r.status);
-      out.innerHTML='⚠ '+msg.replace(/</g,'&lt;');
+    if(key){
+      try{ sessionStorage.setItem('polli_key',key); }catch(e){}
+      var r=await fetch('https://gen.pollinations.ai/v1/images/generations',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body:JSON.stringify({model:'flux',prompt:q,n:1,size:'1024x1024',seed:seed})
+      });
+      var d=await r.json();
+      if(!r.ok){
+        var msg=(d&&d.error&&d.error.message)||('HTTP '+r.status);
+        out.innerHTML='\u26a0 '+String(msg).replace(/</g,'&lt;')+'<br><small>Falling back to the free endpoint...</small>';
+        out.innerHTML+='<div><img src="'+classicUrl(q,seed)+'" alt="generated image" /></div>';
+      }else{
+        var item=(d.data&&d.data[0])||{};
+        var url=item.url||'';
+        if(item.b64_json && !url) url='data:image/png;base64,'+item.b64_json;
+        out.innerHTML = url ? '<img src="'+url+'" alt="generated image" />'
+                            : '\u26a0 No image returned';
+      }
     }else{
-      var item=(d.data&&d.data[0])||{};
-      var url=item.url||item.b64_json||'';
-      if(item.b64_json && !item.url){ url='data:image/png;base64,'+item.b64_json; }
-      if(url){ out.innerHTML='<img src="'+url+'" alt="generated image" />'; }
-      else { out.innerHTML='⚠ No image returned: '+JSON.stringify(d).slice(0,200).replace(/</g,'&lt;'); }
+      // keyless classic endpoint: the browser loads the JPEG directly
+      out.innerHTML='<img src="'+classicUrl(q,seed)+'" alt="generated image" />';
     }
-  }catch(err){ out.innerHTML='⚠ Error: '+String(err.message||err).replace(/</g,'&lt;'); }
+  }catch(err){
+    out.innerHTML='\u26a0 Error: '+String(err.message||err).replace(/</g,'&lt;');
+  }
   btn.disabled=false; inp.select();
 });
 </script>
